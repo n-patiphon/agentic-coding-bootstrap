@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<EOF
-Installs Codex CLI prerequisites and (optionally) writes a default MCP config.
+Installs Codex CLI prerequisites and (optionally) writes default MCP configs (Codex + Cursor).
 
 Usage:
   ${SCRIPT_NAME} [--dry-run] [--no-install] [--no-config]
@@ -14,6 +14,7 @@ Usage:
 What it does:
   - Ensures Node.js (with npm+npx), uv/uvx, and Codex CLI are installed.
   - Copies a default config template to ~/.codex/config.toml if missing.
+  - Copies a default Cursor MCP config to ./.cursor/mcp.json (project) if missing.
 
 Notes:
   - On Debian/Ubuntu, Node.js is installed via the NodeSource apt repo (NODE_MAJOR, default: 20).
@@ -21,13 +22,15 @@ Notes:
 
 Options:
   --no-install  Don't install missing tools (error if missing).
-  --no-config   Don't write ~/.codex/config.toml.
+  --no-config   Don't write config files (~/.codex/config.toml and ./.cursor/mcp.json).
   --dry-run     Print what would happen.
   -h, --help    Show this help.
 
 Env:
   NODE_MAJOR=20   Node.js major version to install on Debian/Ubuntu.
   FS_ALLOWED_DIR=/workspaces  Override the filesystem MCP allowed directory.
+  CURSOR_MCP_PATH=./.cursor/mcp.json  Override where to write Cursor MCP config.
+  CURSOR_WORKSPACE_DIR=/path  Override the workspace dir used in Cursor MCP config.
 EOF
 }
 
@@ -178,6 +181,7 @@ install_codex() {
 CODEX_DIR="${HOME}/.codex"
 CONFIG_PATH="${CODEX_DIR}/config.toml"
 TEMPLATE_PATH="${SCRIPT_DIR}/assets/codex-config.default.toml"
+CURSOR_TEMPLATE_PATH="${SCRIPT_DIR}/assets/cursor-mcp.default.json"
 
 ensure_node
 
@@ -216,14 +220,55 @@ if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
   if [[ "${DRY_RUN}" == "true" ]]; then
     log "DRY_RUN: would substitute __FS_ALLOWED_DIR__ => ${local_allowed_dir}"
   else
-    umask 077
-    tmp="${CONFIG_PATH}.tmp.$$"
-    sed "s|__FS_ALLOWED_DIR__|${local_allowed_dir}|g" "${TEMPLATE_PATH}" > "${tmp}"
-    chmod 600 "${tmp}"
-    mv "${tmp}" "${CONFIG_PATH}"
+    (
+      umask 077
+      tmp="${CONFIG_PATH}.tmp.$$"
+      sed "s|__FS_ALLOWED_DIR__|${local_allowed_dir}|g" "${TEMPLATE_PATH}" > "${tmp}"
+      chmod 600 "${tmp}"
+      mv "${tmp}" "${CONFIG_PATH}"
+    )
   fi
 elif [[ "${WRITE_CONFIG}" == "true" ]]; then
   log "Config already exists, not overwriting: ${CONFIG_PATH}"
+fi
+
+if [[ "${WRITE_CONFIG}" == "true" ]]; then
+  cursor_mcp_path="${CURSOR_MCP_PATH:-}"
+  cursor_workspace_dir="${CURSOR_WORKSPACE_DIR:-}"
+  if [[ -z "${cursor_workspace_dir}" ]]; then
+    cursor_workspace_dir="$(pwd)"
+    if have git; then
+      git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+      if [[ -n "${git_root}" ]]; then
+        cursor_workspace_dir="${git_root}"
+      fi
+    fi
+  fi
+  [[ -d "${cursor_workspace_dir}" ]] || die "Cursor workspace dir does not exist: ${cursor_workspace_dir}"
+
+  if [[ -z "${cursor_mcp_path}" ]]; then
+    cursor_mcp_path="${cursor_workspace_dir}/.cursor/mcp.json"
+  fi
+
+  if [[ ! -e "${cursor_mcp_path}" ]]; then
+    [[ -f "${CURSOR_TEMPLATE_PATH}" ]] || die "Missing template: ${CURSOR_TEMPLATE_PATH}"
+    cursor_mcp_dir="$(dirname "${cursor_mcp_path}")"
+    log "Writing default Cursor MCP config: ${cursor_mcp_path}"
+    run mkdir -p "${cursor_mcp_dir}"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log "DRY_RUN: would substitute __CURSOR_WORKSPACE_DIR__ => ${cursor_workspace_dir}"
+    else
+      (
+        umask 077
+        tmp="${cursor_mcp_path}.tmp.$$"
+        sed "s|__CURSOR_WORKSPACE_DIR__|${cursor_workspace_dir}|g" "${CURSOR_TEMPLATE_PATH}" > "${tmp}"
+        chmod 600 "${tmp}"
+        mv "${tmp}" "${cursor_mcp_path}"
+      )
+    fi
+  else
+    log "Cursor MCP config already exists, not overwriting: ${cursor_mcp_path}"
+  fi
 fi
 
 for cmd in node npm npx uvx codex; do
