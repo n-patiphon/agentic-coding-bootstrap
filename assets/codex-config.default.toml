@@ -1,10 +1,14 @@
-# Minimal Codex CLI + MCP config.
+# Default Codex CLI + MCP config.
 #
-# bootstrap-agentic-coding.sh copies this to ~/.codex/config.toml if that file
-# doesn't exist yet. The placeholder __FS_ALLOWED_DIR__ is replaced with a real
+# bootstrap-agentic-coding.sh copies this to `~/.codex/config.toml` if that file
+# doesn't exist yet. The placeholder `__FS_ALLOWED_DIR__` is replaced with a real
 # path that exists on disk.
 
+# --- Defaults (used when no profile is selected) ---
 model = "gpt-5.2"
+
+# You can set this per-profile if you only want "high" reasoning sometimes.
+# model_reasoning_effort = "high"
 
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
@@ -13,8 +17,34 @@ approval_policy = "on-request"
 network_access = true
 
 [features]
+# Keep disabled by default; enable only if you want Codex to request web searches.
+# web_search_request = true
 rmcp_client = true
 
+# --- Profiles (use: `codex --profile <name>`) ---
+#
+# Note: Profiles override root-level settings. Consider also setting:
+#   profile = "<name>"
+# at the top level to make one profile the default.
+
+[profiles.read]
+sandbox_mode = "read-only"
+approval_policy = "untrusted"
+
+[profiles.write]
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[profiles.auto]
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[profiles.yolo]
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+# --- MCP servers ---
 [mcp_servers.filesystem]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-filesystem", "__FS_ALLOWED_DIR__"]
