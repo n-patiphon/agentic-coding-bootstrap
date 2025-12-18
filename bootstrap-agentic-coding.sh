@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]-$0}"
+SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
 
 usage() {
   cat <<EOF
@@ -14,7 +15,7 @@ Usage:
 What it does:
   - Ensures Node.js (with npm+npx), uv/uvx, and Codex CLI are installed.
   - Copies a default config template to ~/.codex/config.toml if missing.
-  - Copies a default Cursor MCP config to ./.cursor/mcp.json (project) if missing.
+  - Copies a default Cursor MCP config to ~/.cursor/mcp.json if missing.
 
 Notes:
   - On Debian/Ubuntu, Node.js is installed via the NodeSource apt repo (NODE_MAJOR, default: 20).
@@ -22,15 +23,15 @@ Notes:
 
 Options:
   --no-install  Don't install missing tools (error if missing).
-  --no-config   Don't write config files (~/.codex/config.toml and ./.cursor/mcp.json).
+  --no-config   Don't write config files (~/.codex/config.toml and ~/.cursor/mcp.json).
   --dry-run     Print what would happen.
   -h, --help    Show this help.
 
 Env:
   NODE_MAJOR=20   Node.js major version to install on Debian/Ubuntu.
   FS_ALLOWED_DIR=/workspaces  Override the filesystem MCP allowed directory.
-  CURSOR_MCP_PATH=./.cursor/mcp.json  Override where to write Cursor MCP config.
-  CURSOR_WORKSPACE_DIR=/path  Override the workspace dir used in Cursor MCP config.
+  CURSOR_MCP_PATH=~/.cursor/mcp.json  Override where to write Cursor MCP config.
+  CURSOR_WORKSPACE_DIR=\${workspaceFolder}  Override the workspace dir used in Cursor MCP config.
 EOF
 }
 
@@ -65,6 +66,33 @@ run() {
 LOCAL_BIN="${HOME}/.local/bin"
 # Allow the script itself to see user installs (even if the parent shell doesn't).
 export PATH="${LOCAL_BIN}:${PATH}"
+
+ensure_assets() {
+  # When executed via `curl ... | bash`, SCRIPT_DIR points to a fd path and the
+  # repo-local assets/ directory isn't available. In that case, download the
+  # templates from GitHub raw as a fallback.
+  if [[ -f "${TEMPLATE_PATH}" && -f "${CURSOR_TEMPLATE_PATH}" ]]; then
+    return 0
+  fi
+
+  have curl || die "Missing template assets and curl is not installed. Clone the repo (recommended) or install curl."
+
+  local raw_base="${AGENTIC_BOOTSTRAP_RAW_BASE:-https://raw.githubusercontent.com/n-patiphon/agentic-coding-bootstrap/main}"
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log "DRY_RUN: would download template assets from ${raw_base}"
+    return 0
+  fi
+
+  tmp_assets_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_assets_dir}"' EXIT
+
+  curl -fsSL "${raw_base}/assets/codex-config.default.toml" -o "${tmp_assets_dir}/codex-config.default.toml"
+  curl -fsSL "${raw_base}/assets/cursor-mcp.default.json" -o "${tmp_assets_dir}/cursor-mcp.default.json"
+
+  TEMPLATE_PATH="${tmp_assets_dir}/codex-config.default.toml"
+  CURSOR_TEMPLATE_PATH="${tmp_assets_dir}/cursor-mcp.default.json"
+}
 
 run_root() {
   if [[ "${DRY_RUN}" == "true" ]]; then
@@ -183,6 +211,8 @@ CONFIG_PATH="${CODEX_DIR}/config.toml"
 TEMPLATE_PATH="${SCRIPT_DIR}/assets/codex-config.default.toml"
 CURSOR_TEMPLATE_PATH="${SCRIPT_DIR}/assets/cursor-mcp.default.json"
 
+ensure_assets
+
 ensure_node
 
 if ! have uvx; then
@@ -233,21 +263,10 @@ elif [[ "${WRITE_CONFIG}" == "true" ]]; then
 fi
 
 if [[ "${WRITE_CONFIG}" == "true" ]]; then
-  cursor_mcp_path="${CURSOR_MCP_PATH:-}"
-  cursor_workspace_dir="${CURSOR_WORKSPACE_DIR:-}"
-  if [[ -z "${cursor_workspace_dir}" ]]; then
-    cursor_workspace_dir="$(pwd)"
-    if have git; then
-      git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-      if [[ -n "${git_root}" ]]; then
-        cursor_workspace_dir="${git_root}"
-      fi
-    fi
-  fi
-  [[ -d "${cursor_workspace_dir}" ]] || die "Cursor workspace dir does not exist: ${cursor_workspace_dir}"
-
-  if [[ -z "${cursor_mcp_path}" ]]; then
-    cursor_mcp_path="${cursor_workspace_dir}/.cursor/mcp.json"
+  cursor_mcp_path="${CURSOR_MCP_PATH:-${HOME}/.cursor/mcp.json}"
+  cursor_workspace_dir="${CURSOR_WORKSPACE_DIR:-\${workspaceFolder}}"
+  if [[ "${cursor_workspace_dir}" != *'${'* ]]; then
+    [[ -d "${cursor_workspace_dir}" ]] || die "Cursor workspace dir does not exist: ${cursor_workspace_dir}"
   fi
 
   if [[ ! -e "${cursor_mcp_path}" ]]; then
