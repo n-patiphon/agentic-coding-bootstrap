@@ -1,6 +1,6 @@
 # Minimal Codex CLI + MCP config.
 #
-# bootstrap-codex-mcp.sh copies this to ~/.codex/config.toml if that file
+# bootstrap-agentic-coding.sh copies this to ~/.codex/config.toml if that file
 # doesn't exist yet. The placeholder __FS_ALLOWED_DIR__ is replaced with a real
 # path that exists on disk.
 

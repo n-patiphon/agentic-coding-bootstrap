@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<EOF
-Installs Codex CLI prerequisites and (optionally) writes default MCP configs (Codex + Cursor).
+Bootstraps agentic-coding tooling (Codex CLI + MCP) and (optionally) writes default configs (Codex + Cursor).
 
 Usage:
   ${SCRIPT_NAME} [--dry-run] [--no-install] [--no-config]
