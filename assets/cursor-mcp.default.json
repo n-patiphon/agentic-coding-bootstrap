@@ -15,8 +15,7 @@
 				"serena",
 				"start-mcp-server",
 				"--context",
-				"ide-assistant",
-				"__CURSOR_WORKSPACE_DIR__"
+				"ide-assistant"
 			]
 		},
 		"filesystem": {
@@ -25,6 +24,13 @@
 				"-y",
 				"@modelcontextprotocol/server-filesystem",
 				"__CURSOR_WORKSPACE_DIR__"
+			]
+		},
+		"mcp-atlassian-api": {
+			"command": "npx",
+			"args": [
+				"mcp-remote",
+				"https://mcp.atlassian.com/v1/mcp"
 			]
 		}
 	}

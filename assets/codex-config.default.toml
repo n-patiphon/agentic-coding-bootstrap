@@ -17,8 +17,7 @@ approval_policy = "on-request"
 network_access = true
 
 [features]
-# Keep disabled by default; enable only if you want Codex to request web searches.
-# web_search_request = true
+web_search_request = true
 rmcp_client = true
 
 # --- Profiles (use: `codex --profile <name>`) ---
@@ -28,10 +27,12 @@ rmcp_client = true
 # at the top level to make one profile the default.
 
 [profiles.read]
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "untrusted"
 
 [profiles.write]
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
@@ -41,6 +42,7 @@ sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
 [profiles.yolo]
+model_reasoning_effort = "high"
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
 
@@ -67,3 +69,6 @@ args = ["-y", "@upstash/context7-mcp@latest"]
 [mcp_servers.playwright]
 command = "npx"
 args = ["-y", "@playwright/mcp@latest"]
+
+[mcp_servers.atlassian]
+url = "https://mcp.atlassian.com/v1/mcp"
