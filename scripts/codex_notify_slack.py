@@ -140,6 +140,35 @@ def _format_text(notification: dict) -> tuple[str, str]:
     return title, text
 
 
+def _extract_cwd(notification: dict) -> str:
+    for k in ("cwd", "workdir", "work_dir", "working_directory"):
+        v = notification.get(k)
+        if v is not None:
+            s = str(v).strip()
+            if s:
+                return s
+    return ""
+
+
+def _task_title(notification: dict) -> str:
+    cwd = _extract_cwd(notification)
+    if cwd:
+        return f"*Agent responses* : ({cwd})"
+    return "*Agent responses*"
+
+
+def _root_text(notification: dict, message: str) -> tuple[str, str]:
+    title = _task_title(notification)
+    # Root message includes title (+ dir) then message.
+    text = title + "\n" + "\n" + _truncate(message, 3500)
+    return title, text
+
+
+def _reply_text(message: str) -> str:
+    # Replies should be the message only to avoid clutter.
+    return _truncate(message, 3900)
+
+
 def _threads_path() -> Path:
     return Path(os.path.expanduser("~/.codex/slack_threads.json"))
 
@@ -212,7 +241,15 @@ def main() -> int:
     if notification.get("type") != "agent-turn-complete":
         return 0
 
+    # Keep message extraction consistent across output modes.
     title, text = _format_text(notification)
+    message_only = (
+        notification.get("last-assistant-message")
+        or notification.get("last_assistant_message")
+        or notification.get("message")
+        or ""
+    )
+    message_only = str(message_only).strip() or "(no assistant message)"
     session_id = _extract_session_id(notification)
     session_key = _session_key(session_id)
 
@@ -240,9 +277,9 @@ def main() -> int:
                         _post_chat_post_message(
                             bot_token,
                             channel,
-                            text,
+                            _reply_text(message_only),
                             thread_ts=thread_ts,
-                            reply_broadcast=True,
+                            reply_broadcast=False,
                         )
                         threads[session_key] = {
                             "channel": channel,
@@ -270,7 +307,8 @@ def main() -> int:
                             raise
 
                 # Start a new thread.
-                ts = _post_chat_post_message(bot_token, channel, text)
+                root_title, root_text = _root_text(notification, message_only)
+                ts = _post_chat_post_message(bot_token, channel, root_text)
                 threads[session_key] = {"channel": channel, "thread_ts": ts, "updated_at": int(time.time())}
                 _save_threads(threads)
                 if debug_path:
@@ -283,6 +321,7 @@ def main() -> int:
                             "session_key": session_key,
                             "channel": channel,
                             "thread_ts": ts,
+                            "title": root_title,
                             "notification_keys": sorted(notification.keys()),
                         },
                     )
@@ -292,7 +331,8 @@ def main() -> int:
 
         # Fallback: incoming webhook (no threading).
         if webhook_url:
-            _post_webhook(webhook_url, text)
+            root_title, root_text = _root_text(notification, message_only)
+            _post_webhook(webhook_url, root_text)
             if debug_path:
                 _debug_log(
                     debug_path,
@@ -301,13 +341,15 @@ def main() -> int:
                         "used": "webhook",
                         "session_id": session_id,
                         "session_key": session_key,
+                        "title": root_title,
                         "notification_keys": sorted(notification.keys()),
                     },
                 )
             return 0
 
         # Final fallback: desktop notification.
-        _notify_send(title, _truncate(text, 900))
+        root_title, root_text = _root_text(notification, message_only)
+        _notify_send(root_title, _truncate(root_text, 900))
         if debug_path:
             _debug_log(
                 debug_path,
@@ -316,6 +358,7 @@ def main() -> int:
                     "used": "notify_send",
                     "session_id": session_id,
                     "session_key": session_key,
+                    "title": root_title,
                     "notification_keys": sorted(notification.keys()),
                 },
             )

@@ -24,3 +24,8 @@ Fallbacks:
 
 - Incoming webhook (unthreaded): `export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'`
 - Desktop notification: `notify-send` (if installed)
+
+Message format:
+
+- First message in a session thread: `Task summary (<dir>)` + the assistant message
+- Replies: assistant message only (to keep the channel/thread less cluttered)
