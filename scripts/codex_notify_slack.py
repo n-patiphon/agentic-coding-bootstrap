@@ -82,9 +82,39 @@ def _notify_send(title: str, body: str) -> None:
     subprocess.run(["notify-send", title, body], check=True)
 
 
-def _session_id(notification: dict) -> str:
-    sid = notification.get("session-id") or notification.get("session_id") or ""
-    return str(sid).strip()
+def _extract_session_id(notification: dict) -> str:
+    candidates: list[object] = []
+
+    for k in ("session-id", "session_id", "sessionId", "sessionID", "session id", "codex_session_id", "codexSessionId"):
+        if k in notification:
+            candidates.append(notification.get(k))
+
+    sess = notification.get("session")
+    if isinstance(sess, str):
+        candidates.append(sess)
+    elif isinstance(sess, dict):
+        for k in ("id", "session-id", "session_id", "sessionId"):
+            if k in sess:
+                candidates.append(sess.get(k))
+
+    for k in ("CODEX_SESSION_ID", "CODEX_SESSION", "CODEX_SESSIONID"):
+        v = os.environ.get(k)
+        if v:
+            candidates.append(v)
+
+    for c in candidates:
+        s = str(c).strip() if c is not None else ""
+        if s:
+            return s
+    return ""
+
+
+def _session_key(session_id: str) -> str:
+    # If Codex doesn't provide a stable session id in the notify payload, fall back to
+    # the parent process id (Codex TUI keeps the same parent PID for a session).
+    if session_id:
+        return f"sid:{session_id}"
+    return f"ppid:{os.getppid()}"
 
 
 def _format_text(notification: dict) -> tuple[str, str]:
@@ -96,7 +126,7 @@ def _format_text(notification: dict) -> tuple[str, str]:
     )
     last_msg = str(last_msg).strip() or "(no assistant message)"
 
-    sid = _session_id(notification)
+    sid = _extract_session_id(notification)
     cwd = str(notification.get("cwd") or "").strip()
     model = str(notification.get("model") or "").strip()
 
@@ -161,6 +191,13 @@ def _prune_threads(threads: dict, *, max_age_s: int = 7 * 24 * 3600) -> dict:
     return pruned
 
 
+def _debug_log(path: str, payload: dict) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("usage: codex_notify_slack.py '<notification_json>'", file=sys.stderr)
@@ -176,12 +213,14 @@ def main() -> int:
         return 0
 
     title, text = _format_text(notification)
-    session_id = _session_id(notification)
+    session_id = _extract_session_id(notification)
+    session_key = _session_key(session_id)
 
     try:
         bot_token = os.environ.get("SLACK_BOT_TOKEN", "").strip()
         channel = os.environ.get("SLACK_CHANNEL", "").strip()
         webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+        debug_path = os.environ.get("CODEX_NOTIFY_DEBUG_PATH", "").strip()
 
         # Preferred: Slack Web API (supports threading).
         if bot_token and channel:
@@ -189,34 +228,64 @@ def main() -> int:
             def _send_slack_api() -> None:
                 threads = _prune_threads(_load_threads())
 
-                entry = threads.get(session_id) if session_id else None
+                entry = threads.get(session_key)
                 thread_ts: str | None = None
                 if isinstance(entry, dict) and entry.get("channel") == channel:
                     v = entry.get("thread_ts")
                     if isinstance(v, str) and v:
                         thread_ts = v
 
-                if session_id and thread_ts:
-                    _post_chat_post_message(
-                        bot_token,
-                        channel,
-                        text,
-                        thread_ts=thread_ts,
-                        reply_broadcast=True,
-                    )
-                    threads[session_id] = {
-                        "channel": channel,
-                        "thread_ts": thread_ts,
-                        "updated_at": int(time.time()),
-                    }
-                    _save_threads(threads)
-                    return
+                if thread_ts:
+                    try:
+                        _post_chat_post_message(
+                            bot_token,
+                            channel,
+                            text,
+                            thread_ts=thread_ts,
+                            reply_broadcast=True,
+                        )
+                        threads[session_key] = {
+                            "channel": channel,
+                            "thread_ts": thread_ts,
+                            "updated_at": int(time.time()),
+                        }
+                        _save_threads(threads)
+                        if debug_path:
+                            _debug_log(
+                                debug_path,
+                                {
+                                    "ts": time.time(),
+                                    "used": "slack_api_reply",
+                                    "session_id": session_id,
+                                    "session_key": session_key,
+                                    "channel": channel,
+                                    "thread_ts": thread_ts,
+                                    "notification_keys": sorted(notification.keys()),
+                                },
+                            )
+                        return
+                    except RuntimeError as e:
+                        # If the saved thread no longer exists, fall back to creating a new one.
+                        if "thread_not_found" not in str(e):
+                            raise
 
-                # First message for this session (or session_id missing): start a new thread.
+                # Start a new thread.
                 ts = _post_chat_post_message(bot_token, channel, text)
-                if session_id:
-                    threads[session_id] = {"channel": channel, "thread_ts": ts, "updated_at": int(time.time())}
-                    _save_threads(threads)
+                threads[session_key] = {"channel": channel, "thread_ts": ts, "updated_at": int(time.time())}
+                _save_threads(threads)
+                if debug_path:
+                    _debug_log(
+                        debug_path,
+                        {
+                            "ts": time.time(),
+                            "used": "slack_api_root",
+                            "session_id": session_id,
+                            "session_key": session_key,
+                            "channel": channel,
+                            "thread_ts": ts,
+                            "notification_keys": sorted(notification.keys()),
+                        },
+                    )
 
             _with_threads_lock(_send_slack_api)
             return 0
@@ -224,10 +293,32 @@ def main() -> int:
         # Fallback: incoming webhook (no threading).
         if webhook_url:
             _post_webhook(webhook_url, text)
+            if debug_path:
+                _debug_log(
+                    debug_path,
+                    {
+                        "ts": time.time(),
+                        "used": "webhook",
+                        "session_id": session_id,
+                        "session_key": session_key,
+                        "notification_keys": sorted(notification.keys()),
+                    },
+                )
             return 0
 
         # Final fallback: desktop notification.
         _notify_send(title, _truncate(text, 900))
+        if debug_path:
+            _debug_log(
+                debug_path,
+                {
+                    "ts": time.time(),
+                    "used": "notify_send",
+                    "session_id": session_id,
+                    "session_key": session_key,
+                    "notification_keys": sorted(notification.keys()),
+                },
+            )
         return 0
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
         print(f"error: notify failed: {e}", file=sys.stderr)
@@ -239,4 +330,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
