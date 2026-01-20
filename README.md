@@ -9,3 +9,11 @@ One-line install options:
 Usage:
 - `./bootstrap-agentic-coding.sh --help`
 - `./bootstrap-agentic-coding.sh`
+
+## Slack notifications (Codex CLI)
+
+The default `assets/codex-config.default.toml` enables `notify` and installs a small notifier script.
+
+Configure one of these before starting `codex`:
+- Incoming webhook: `export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'`
+- Slack Web API: `export SLACK_BOT_TOKEN='xoxb-...'` and `export SLACK_CHANNEL='C0123456789'`

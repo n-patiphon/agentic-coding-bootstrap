@@ -13,6 +13,15 @@ model = "gpt-5.2"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
+# --- Notifications ---
+#
+# To enable Slack notifications on each completed assistant turn, set one of:
+#   - SLACK_WEBHOOK_URL (Incoming Webhook)
+#   - SLACK_BOT_TOKEN + SLACK_CHANNEL (chat.postMessage)
+#
+# The bootstrap script installs the notifier to __CODEX_DIR__/bin/codex_notify_slack.py.
+notify = ["python3", "__CODEX_DIR__/bin/codex_notify_slack.py"]
+
 [sandbox_workspace_write]
 network_access = true
 

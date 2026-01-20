@@ -71,7 +71,7 @@ ensure_assets() {
   # When executed via `curl ... | bash`, SCRIPT_DIR points to a fd path and the
   # repo-local assets/ directory isn't available. In that case, download the
   # templates from GitHub raw as a fallback.
-  if [[ -f "${TEMPLATE_PATH}" && -f "${CURSOR_TEMPLATE_PATH}" ]]; then
+  if [[ -f "${TEMPLATE_PATH}" && -f "${CURSOR_TEMPLATE_PATH}" && -f "${NOTIFY_TEMPLATE_PATH}" ]]; then
     return 0
   fi
 
@@ -89,9 +89,11 @@ ensure_assets() {
 
   curl -fsSL "${raw_base}/assets/codex-config.default.toml" -o "${tmp_assets_dir}/codex-config.default.toml"
   curl -fsSL "${raw_base}/assets/cursor-mcp.default.json" -o "${tmp_assets_dir}/cursor-mcp.default.json"
+  curl -fsSL "${raw_base}/scripts/codex_notify_slack.py" -o "${tmp_assets_dir}/codex_notify_slack.py"
 
   TEMPLATE_PATH="${tmp_assets_dir}/codex-config.default.toml"
   CURSOR_TEMPLATE_PATH="${tmp_assets_dir}/cursor-mcp.default.json"
+  NOTIFY_TEMPLATE_PATH="${tmp_assets_dir}/codex_notify_slack.py"
 }
 
 run_root() {
@@ -210,6 +212,7 @@ CODEX_DIR="${HOME}/.codex"
 CONFIG_PATH="${CODEX_DIR}/config.toml"
 TEMPLATE_PATH="${SCRIPT_DIR}/assets/codex-config.default.toml"
 CURSOR_TEMPLATE_PATH="${SCRIPT_DIR}/assets/cursor-mcp.default.json"
+NOTIFY_TEMPLATE_PATH="${SCRIPT_DIR}/scripts/codex_notify_slack.py"
 
 ensure_assets
 
@@ -235,6 +238,7 @@ fi
 
 if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
   [[ -f "${TEMPLATE_PATH}" ]] || die "Missing template: ${TEMPLATE_PATH}"
+  [[ -f "${NOTIFY_TEMPLATE_PATH}" ]] || die "Missing notify script template: ${NOTIFY_TEMPLATE_PATH}"
   local_allowed_dir="${FS_ALLOWED_DIR:-}"
   if [[ -z "${local_allowed_dir}" ]]; then
     if [[ -d /workspaces ]]; then
@@ -245,15 +249,23 @@ if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
   fi
   [[ -d "${local_allowed_dir}" ]] || die "FS_ALLOWED_DIR does not exist: ${local_allowed_dir}"
 
+  log "Installing Codex Slack notifier: ${CODEX_DIR}/bin/codex_notify_slack.py"
+  run install -d -m 0700 "${CODEX_DIR}/bin"
+  run install -m 0700 "${NOTIFY_TEMPLATE_PATH}" "${CODEX_DIR}/bin/codex_notify_slack.py"
+
   log "Writing default Codex config: ${CONFIG_PATH}"
   run mkdir -p "${CODEX_DIR}"
   if [[ "${DRY_RUN}" == "true" ]]; then
     log "DRY_RUN: would substitute __FS_ALLOWED_DIR__ => ${local_allowed_dir}"
+    log "DRY_RUN: would substitute __CODEX_DIR__ => ${CODEX_DIR}"
   else
     (
       umask 077
       tmp="${CONFIG_PATH}.tmp.$$"
-      sed "s|__FS_ALLOWED_DIR__|${local_allowed_dir}|g" "${TEMPLATE_PATH}" > "${tmp}"
+      sed \
+        -e "s|__FS_ALLOWED_DIR__|${local_allowed_dir}|g" \
+        -e "s|__CODEX_DIR__|${CODEX_DIR}|g" \
+        "${TEMPLATE_PATH}" > "${tmp}"
       chmod 600 "${tmp}"
       mv "${tmp}" "${CONFIG_PATH}"
     )
