@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -150,17 +151,33 @@ def _extract_cwd(notification: dict) -> str:
     return ""
 
 
-def _task_title(notification: dict) -> str:
-    cwd = _extract_cwd(notification)
-    if cwd:
-        return f"*Agent responses* : ({cwd})"
-    return "*Agent responses*"
+def _extract_hostname(notification: dict) -> str:
+    v = notification.get("hostname")
+    if v is not None:
+        s = str(v).strip()
+        if s:
+            return s
+    try:
+        return socket.gethostname()
+    except Exception:
+        return ""
 
 
 def _root_text(notification: dict, message: str) -> tuple[str, str]:
-    title = _task_title(notification)
-    # Root message includes title (+ dir) then message.
-    text = title + "\n" + "\n" + _truncate(message, 3500)
+    hostname = _extract_hostname(notification) or "(unknown)"
+    workspace = _extract_cwd(notification) or "(unknown)"
+    msg = _truncate(message, 3500)
+
+    title = "Agent responses"
+    text = "\n".join(
+        [
+            "*Agent responses*",
+            f"- Hostname : `{hostname}`",
+            f"- Workspace : `{workspace}`",
+            "",
+            msg,
+        ]
+    )
     return title, text
 
 
