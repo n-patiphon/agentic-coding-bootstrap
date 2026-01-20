@@ -15,9 +15,11 @@ approval_policy = "on-request"
 
 # --- Notifications ---
 #
-# To enable Slack notifications on each completed assistant turn, set one of:
-#   - SLACK_WEBHOOK_URL (Incoming Webhook)
-#   - SLACK_BOT_TOKEN + SLACK_CHANNEL (chat.postMessage)
+# The notifier prefers Slack Web API (threaded messages), then falls back to an
+# incoming webhook, then falls back to a local desktop notification:
+#   1) SLACK_BOT_TOKEN + SLACK_CHANNEL (chat.postMessage, threaded by session)
+#   2) SLACK_WEBHOOK_URL (Incoming Webhook, unthreaded)
+#   3) notify-send (desktop notification)
 #
 # The bootstrap script installs the notifier to __CODEX_DIR__/bin/codex_notify_slack.py.
 notify = ["python3", "__CODEX_DIR__/bin/codex_notify_slack.py"]
