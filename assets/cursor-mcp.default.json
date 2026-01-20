@@ -26,12 +26,26 @@
 				"__CURSOR_WORKSPACE_DIR__"
 			]
 		},
-		"mcp-atlassian-api": {
+		"atlassian": {
 			"command": "npx",
 			"args": [
 				"mcp-remote",
 				"https://mcp.atlassian.com/v1/mcp"
 			]
+		},
+		"github": {
+			"command": "docker",
+			"args": [
+				"run",
+				"-i",
+				"--rm",
+				"-e",
+				"GITHUB_PERSONAL_ACCESS_TOKEN",
+				"ghcr.io/github/github-mcp-server"
+			],
+			"env": {
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+			}
 		}
 	}
 }
