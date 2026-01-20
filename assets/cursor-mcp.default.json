@@ -1,10 +1,11 @@
 {
 	"mcpServers": {
-		"context7": {
+		"filesystem": {
 			"command": "npx",
 			"args": [
 				"-y",
-				"@upstash/context7-mcp@latest"
+				"@modelcontextprotocol/server-filesystem",
+				"__CURSOR_WORKSPACE_DIR__"
 			]
 		},
 		"serena": {
@@ -18,19 +19,11 @@
 				"ide-assistant"
 			]
 		},
-		"filesystem": {
+		"context7": {
 			"command": "npx",
 			"args": [
 				"-y",
-				"@modelcontextprotocol/server-filesystem",
-				"__CURSOR_WORKSPACE_DIR__"
-			]
-		},
-		"atlassian": {
-			"command": "npx",
-			"args": [
-				"mcp-remote",
-				"https://mcp.atlassian.com/v1/mcp"
+				"@upstash/context7-mcp@latest"
 			]
 		},
 		"github": {
@@ -46,6 +39,17 @@
 			"env": {
 				"GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
 			}
+		},
+		"atlassian": {
+			"command": "npx",
+			"args": [
+				"mcp-remote",
+				"https://mcp.atlassian.com/v1/mcp"
+			]
+		},
+		"playwright": {
+			"command": "npx",
+			"args": ["@playwright/mcp@latest"]
 		}
 	}
 }
