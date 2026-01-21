@@ -88,3 +88,21 @@ url = "https://mcp.atlassian.com/v1/mcp"
 [mcp_servers.playwright]
 command = "npx"
 args = ["-y", "@playwright/mcp@latest"]
+
+# --- Local LLM server setup ---
+[model_providers.local-llama]
+name = "local-llama (llama.cpp)"
+base_url = "http://127.0.0.1:8080/v1"
+wire_api = "chat"                       # Will soon be deprecated and to be updated to `response`
+request_max_retries = 1
+stream_max_retries = 1
+
+[profiles.local]
+model = "minimax"                       # must match llama-server --alias
+model_provider = "local-llama"
+model_reasoning_effort = "xhigh"
+model_context_window = 98000
+model_auto_compact_token_limit = 49000  # To be tuned
+tool_output_token_limit = 5000          # To be tuned
+features.remote_compaction = false
+features.remote_models = false
