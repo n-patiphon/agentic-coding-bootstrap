@@ -12,6 +12,7 @@ model = "gpt-5.2"
 
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
+web_search = "live"
 
 # --- Notifications ---
 #
@@ -28,7 +29,6 @@ notify = ["python3", "__CODEX_DIR__/bin/codex_notify_slack.py"]
 network_access = true
 
 [features]
-web_search_request = true
 rmcp_client = true
 
 # --- Profiles (use: `codex --profile <name>`) ---
@@ -93,16 +93,16 @@ args = ["-y", "@playwright/mcp@latest"]
 [model_providers.local-llama]
 name = "local-llama (llama.cpp)"
 base_url = "http://127.0.0.1:8080/v1"
-wire_api = "chat"                       # Will soon be deprecated and to be updated to `response`
-request_max_retries = 1
-stream_max_retries = 1
+wire_api = "responses"
 
-[profiles.local]
-model = "minimax"                       # must match llama-server --alias
+[profiles.local]]
+model = "minimax"                  # must match llama-server --alias
 model_provider = "local-llama"
 model_reasoning_effort = "xhigh"
-model_context_window = 98000
-model_auto_compact_token_limit = 49000  # To be tuned
-tool_output_token_limit = 5000          # To be tuned
-features.remote_compaction = false
-features.remote_models = false
+model_context_window = 196608
+model_auto_compact_token_limit = 99000  # To be tuned
+tool_output_token_limit = 9000          # Could be lowered to save context
+features.remote_compaction = false # Disable context compaction using OpenAI model
+features.remote_models = false # Disable OpenAI model
+features.web_search_request = false # Up to v0.91
+web_search = "disabled" # From v0.92 onward
