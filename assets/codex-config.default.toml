@@ -92,10 +92,10 @@ args = ["-y", "@playwright/mcp@latest"]
 # --- Local LLM server setup ---
 [model_providers.local-llama]
 name = "local-llama (llama.cpp)"
-base_url = "http://127.0.0.1:8080/v1"
+base_url = "http://127.0.0.1:8001/v1"
 wire_api = "responses"
 
-[profiles.minimax]]
+[profiles.minimax]
 model = "minimax"                        # must match llama-server --alias
 model_provider = "local-llama"
 model_reasoning_effort = "xhigh"
@@ -104,17 +104,15 @@ model_auto_compact_token_limit = 118000  # To be tuned
 tool_output_token_limit = 12000          # Could be lowered to save context
 features.remote_compaction = false       # Disable context compaction using OpenAI model
 features.remote_models = false           # Disable OpenAI model
-features.web_search_request = false      # Up to v0.91
 web_search = "disabled"                  # From v0.92 onward
 
 [profiles.qwen3]
 model = "qwen3-coder-next"                      # must match llama-server --alias
-model_provider = "llama-cpp"
+model_provider = "local-llama"
 model_reasoning_effort = "xhigh"
 model_context_window = 128000
 model_auto_compact_token_limit = 118000  # To be tuned
 tool_output_token_limit = 12000          # Could be lowered to save context
 features.remote_compaction = false       # Disable context compaction using OpenAI model
 features.remote_models = false           # Disable OpenAI model
-features.web_search_request = false      # Up to v0.91
 web_search = "disabled"                  # From v0.92 onward
