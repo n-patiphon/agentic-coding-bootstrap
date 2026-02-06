@@ -5,7 +5,7 @@
 # path that exists on disk.
 
 # --- Defaults (used when no profile is selected) ---
-model = "gpt-5.2"
+model = "gpt-5.3-codex"
 
 # You can set this per-profile if you only want "high" reasoning sometimes.
 # model_reasoning_effort = "high"
@@ -95,14 +95,26 @@ name = "local-llama (llama.cpp)"
 base_url = "http://127.0.0.1:8080/v1"
 wire_api = "responses"
 
-[profiles.local]]
-model = "minimax"                  # must match llama-server --alias
+[profiles.minimax]]
+model = "minimax"                        # must match llama-server --alias
 model_provider = "local-llama"
 model_reasoning_effort = "xhigh"
-model_context_window = 196608
-model_auto_compact_token_limit = 99000  # To be tuned
-tool_output_token_limit = 9000          # Could be lowered to save context
-features.remote_compaction = false # Disable context compaction using OpenAI model
-features.remote_models = false # Disable OpenAI model
-features.web_search_request = false # Up to v0.91
-web_search = "disabled" # From v0.92 onward
+model_context_window = 128000
+model_auto_compact_token_limit = 118000  # To be tuned
+tool_output_token_limit = 12000          # Could be lowered to save context
+features.remote_compaction = false       # Disable context compaction using OpenAI model
+features.remote_models = false           # Disable OpenAI model
+features.web_search_request = false      # Up to v0.91
+web_search = "disabled"                  # From v0.92 onward
+
+[profiles.qwen3]
+model = "qwen3-coder-next"                      # must match llama-server --alias
+model_provider = "llama-cpp"
+model_reasoning_effort = "xhigh"
+model_context_window = 128000
+model_auto_compact_token_limit = 118000  # To be tuned
+tool_output_token_limit = 12000          # Could be lowered to save context
+features.remote_compaction = false       # Disable context compaction using OpenAI model
+features.remote_models = false           # Disable OpenAI model
+features.web_search_request = false      # Up to v0.91
+web_search = "disabled"                  # From v0.92 onward
