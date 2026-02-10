@@ -60,7 +60,7 @@ approval_policy = "never"
 # --- MCP servers ---
 [mcp_servers.playwright]
 command = "npx"
-args = ["-y", "@playwright/mcp@latest"]
+args = ["-y", "@playwright/mcp@latest", "--allow-unrestricted-file-access"]
 
 [mcp_servers.github]
 command = "docker"
