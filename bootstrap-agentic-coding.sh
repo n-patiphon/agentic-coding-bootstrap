@@ -29,7 +29,6 @@ Options:
 
 Env:
   NODE_MAJOR=20   Node.js major version to install on Debian/Ubuntu.
-  FS_ALLOWED_DIR=/workspaces  Override the filesystem MCP allowed directory.
   CURSOR_MCP_PATH=~/.cursor/mcp.json  Override where to write Cursor MCP config.
   CURSOR_WORKSPACE_DIR=\${workspaceFolder}  Override the workspace dir used in Cursor MCP config.
 EOF
@@ -239,15 +238,6 @@ fi
 if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
   [[ -f "${TEMPLATE_PATH}" ]] || die "Missing template: ${TEMPLATE_PATH}"
   [[ -f "${NOTIFY_TEMPLATE_PATH}" ]] || die "Missing notify script template: ${NOTIFY_TEMPLATE_PATH}"
-  local_allowed_dir="${FS_ALLOWED_DIR:-}"
-  if [[ -z "${local_allowed_dir}" ]]; then
-    if [[ -d /workspaces ]]; then
-      local_allowed_dir="/workspaces"
-    else
-      local_allowed_dir="$(pwd)"
-    fi
-  fi
-  [[ -d "${local_allowed_dir}" ]] || die "FS_ALLOWED_DIR does not exist: ${local_allowed_dir}"
 
   log "Installing Codex Slack notifier: ${CODEX_DIR}/bin/codex_notify_slack.py"
   run install -d -m 0700 "${CODEX_DIR}/bin"
@@ -256,14 +246,12 @@ if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
   log "Writing default Codex config: ${CONFIG_PATH}"
   run mkdir -p "${CODEX_DIR}"
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log "DRY_RUN: would substitute __FS_ALLOWED_DIR__ => ${local_allowed_dir}"
     log "DRY_RUN: would substitute __CODEX_DIR__ => ${CODEX_DIR}"
   else
     (
       umask 077
       tmp="${CONFIG_PATH}.tmp.$$"
       sed \
-        -e "s|__FS_ALLOWED_DIR__|${local_allowed_dir}|g" \
         -e "s|__CODEX_DIR__|${CODEX_DIR}|g" \
         "${TEMPLATE_PATH}" > "${tmp}"
       chmod 600 "${tmp}"
@@ -305,10 +293,6 @@ fi
 for cmd in node npm npx uvx codex; do
   have "${cmd}" || die "Required command not found on PATH: ${cmd}"
 done
-
-if ! have git; then
-  warn "git not found; `uvx --from git+...` (serena MCP) will need git installed."
-fi
 
 log "Bootstrap complete."
 log "  codex: $(command -v codex) ($(codex --version 2>/dev/null || echo 'unknown'))"
