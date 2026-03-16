@@ -61,10 +61,10 @@ approval_policy = "never"
 command = "npx"
 args = ["-y", "@playwright/mcp@latest", "--allow-unrestricted-file-access"]
 
-[mcp_servers.github]
-command = "docker"
-args = ["run","-i","--rm","-e","GITHUB_PERSONAL_ACCESS_TOKEN","ghcr.io/github/github-mcp-server"]
-env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]
+#[mcp_servers.github]
+#command = "docker"
+#args = ["run","-i","--rm","-e","GITHUB_PERSONAL_ACCESS_TOKEN","ghcr.io/github/github-mcp-server"]
+#env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]
 
 #[mcp_servers.atlassian]
 #url = "https://mcp.atlassian.com/v1/mcp"
