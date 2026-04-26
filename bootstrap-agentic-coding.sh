@@ -2,35 +2,36 @@
 set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
-SCRIPT_PATH="${BASH_SOURCE[0]-$0}"
-SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
 
 usage() {
   cat <<EOF
-Bootstraps agentic-coding tooling (Codex CLI + MCP) and (optionally) writes default configs (Codex + Cursor).
+Bootstraps agentic-coding tooling by installing common prerequisites and CLIs.
 
 Usage:
-  ${SCRIPT_NAME} [--dry-run] [--no-install] [--no-config]
+  ${SCRIPT_NAME} [--dry-run] [--no-install]
 
 What it does:
-  - Ensures Node.js (with npm+npx), uv/uvx, and Codex CLI are installed.
-  - Copies a default config template to ~/.codex/config.toml if missing.
-  - Copies a default Cursor MCP config to ~/.cursor/mcp.json if missing.
+  - Ensures Node.js (with npm+npx), uv/uvx, Codex CLI, and OpenCode CLI are installed.
+
+What it does not do:
+  - Write ~/.codex/config.toml
+  - Write ~/.config/opencode/opencode.json
+  - Configure MCP servers
+  - Install notifier scripts
+  - Manage provider/model credentials
 
 Notes:
   - On Debian/Ubuntu, Node.js is installed via the NodeSource apt repo (NODE_MAJOR, default: 20).
-  - If Codex is installed to a user prefix, you'll need \$HOME/.local/bin on your PATH.
+  - If a tool is installed to a user prefix, you'll need \$HOME/.local/bin on your PATH.
+  - OpenCode is installed via npm as \`opencode-ai\` per the official docs.
 
 Options:
   --no-install  Don't install missing tools (error if missing).
-  --no-config   Don't write config files (~/.codex/config.toml and ~/.cursor/mcp.json).
   --dry-run     Print what would happen.
   -h, --help    Show this help.
 
 Env:
   NODE_MAJOR=20   Node.js major version to install on Debian/Ubuntu.
-  CURSOR_MCP_PATH=~/.cursor/mcp.json  Override where to write Cursor MCP config.
-  CURSOR_WORKSPACE_DIR=\${workspaceFolder}  Override the workspace dir used in Cursor MCP config.
 EOF
 }
 
@@ -40,13 +41,11 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 INSTALL=true
-WRITE_CONFIG=true
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-install) INSTALL=false ;;
-    --no-config) WRITE_CONFIG=false ;;
     --dry-run) DRY_RUN=true ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1 (try --help)" ;;
@@ -62,39 +61,6 @@ run() {
   "$@"
 }
 
-LOCAL_BIN="${HOME}/.local/bin"
-# Allow the script itself to see user installs (even if the parent shell doesn't).
-export PATH="${LOCAL_BIN}:${PATH}"
-
-ensure_assets() {
-  # When executed via `curl ... | bash`, SCRIPT_DIR points to a fd path and the
-  # repo-local assets/ directory isn't available. In that case, download the
-  # templates from GitHub raw as a fallback.
-  if [[ -f "${TEMPLATE_PATH}" && -f "${CURSOR_TEMPLATE_PATH}" && -f "${NOTIFY_TEMPLATE_PATH}" ]]; then
-    return 0
-  fi
-
-  have curl || die "Missing template assets and curl is not installed. Clone the repo (recommended) or install curl."
-
-  local raw_base="${AGENTIC_BOOTSTRAP_RAW_BASE:-https://raw.githubusercontent.com/n-patiphon/agentic-coding-bootstrap/main}"
-
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log "DRY_RUN: would download template assets from ${raw_base}"
-    return 0
-  fi
-
-  tmp_assets_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_assets_dir}"' EXIT
-
-  curl -fsSL "${raw_base}/assets/codex-config.default.toml" -o "${tmp_assets_dir}/codex-config.default.toml"
-  curl -fsSL "${raw_base}/assets/cursor-mcp.default.json" -o "${tmp_assets_dir}/cursor-mcp.default.json"
-  curl -fsSL "${raw_base}/scripts/codex_notify_slack.py" -o "${tmp_assets_dir}/codex_notify_slack.py"
-
-  TEMPLATE_PATH="${tmp_assets_dir}/codex-config.default.toml"
-  CURSOR_TEMPLATE_PATH="${tmp_assets_dir}/cursor-mcp.default.json"
-  NOTIFY_TEMPLATE_PATH="${tmp_assets_dir}/codex_notify_slack.py"
-}
-
 run_root() {
   if [[ "${DRY_RUN}" == "true" ]]; then
     log "DRY_RUN (root): $*"
@@ -108,6 +74,9 @@ run_root() {
   sudo "$@"
 }
 
+LOCAL_BIN="${HOME}/.local/bin"
+export PATH="${LOCAL_BIN}:${PATH}"
+
 node_major() { node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0; }
 
 is_nvm_bin() {
@@ -116,8 +85,6 @@ is_nvm_bin() {
 }
 
 maybe_link_usr_local() {
-  # If a tool ends up in ~/.local/bin, symlink it into /usr/local/bin when possible
-  # so it works even if the parent shell doesn't have ~/.local/bin on PATH.
   local name="$1"
   local src="$2"
   [[ -x "${src}" ]] || return 0
@@ -156,8 +123,6 @@ ensure_node() {
     installed="$(node_major)"
     local node_path
     node_path="$(command -v node 2>/dev/null || true)"
-
-    # If Node comes from nvm, it may disappear in new shells unless nvm is sourced.
     if [[ "${installed}" -ge "${required_major}" ]] && ! is_nvm_bin "${node_path}"; then
       return 0
     fi
@@ -198,7 +163,6 @@ install_codex() {
     return 0
   fi
   if have sudo; then
-    # Prefer system-global install so `codex` is immediately on PATH.
     if run_root npm install -g @openai/codex; then
       return 0
     fi
@@ -207,13 +171,20 @@ install_codex() {
   maybe_link_usr_local codex "${LOCAL_BIN}/codex"
 }
 
-CODEX_DIR="${HOME}/.codex"
-CONFIG_PATH="${CODEX_DIR}/config.toml"
-TEMPLATE_PATH="${SCRIPT_DIR}/assets/codex-config.default.toml"
-CURSOR_TEMPLATE_PATH="${SCRIPT_DIR}/assets/cursor-mcp.default.json"
-NOTIFY_TEMPLATE_PATH="${SCRIPT_DIR}/scripts/codex_notify_slack.py"
-
-ensure_assets
+install_opencode() {
+  log "Installing OpenCode CLI (opencode-ai)..."
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run npm install -g opencode-ai
+    return 0
+  fi
+  if have sudo; then
+    if run_root npm install -g opencode-ai; then
+      return 0
+    fi
+  fi
+  run npm install -g --prefix "${HOME}/.local" opencode-ai
+  maybe_link_usr_local opencode "${LOCAL_BIN}/opencode"
+}
 
 ensure_node
 
@@ -229,72 +200,24 @@ if ! have codex; then
 else
   codex_path="$(command -v codex 2>/dev/null || true)"
   if is_nvm_bin "${codex_path}" && [[ "${INSTALL}" == "true" ]]; then
-    # Fix common "installed but not found in new shells" issue from nvm-based installs.
     warn "Found codex from nvm (${codex_path}); also installing a system-global codex."
     install_codex || true
   fi
 fi
 
-if [[ "${WRITE_CONFIG}" == "true" ]] && [[ ! -e "${CONFIG_PATH}" ]]; then
-  [[ -f "${TEMPLATE_PATH}" ]] || die "Missing template: ${TEMPLATE_PATH}"
-  [[ -f "${NOTIFY_TEMPLATE_PATH}" ]] || die "Missing notify script template: ${NOTIFY_TEMPLATE_PATH}"
-
-  log "Installing Codex Slack notifier: ${CODEX_DIR}/bin/codex_notify_slack.py"
-  run install -d -m 0700 "${CODEX_DIR}/bin"
-  run install -m 0700 "${NOTIFY_TEMPLATE_PATH}" "${CODEX_DIR}/bin/codex_notify_slack.py"
-
-  log "Writing default Codex config: ${CONFIG_PATH}"
-  run mkdir -p "${CODEX_DIR}"
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log "DRY_RUN: would substitute __CODEX_DIR__ => ${CODEX_DIR}"
-  else
-    (
-      umask 077
-      tmp="${CONFIG_PATH}.tmp.$$"
-      sed \
-        -e "s|__CODEX_DIR__|${CODEX_DIR}|g" \
-        "${TEMPLATE_PATH}" > "${tmp}"
-      chmod 600 "${tmp}"
-      mv "${tmp}" "${CONFIG_PATH}"
-    )
-  fi
-elif [[ "${WRITE_CONFIG}" == "true" ]]; then
-  log "Config already exists, not overwriting: ${CONFIG_PATH}"
+if ! have opencode; then
+  [[ "${INSTALL}" == "true" ]] || die "Missing opencode (re-run without --no-install)."
+  have npm || die "npm is required to install OpenCode CLI."
+  install_opencode
 fi
 
-if [[ "${WRITE_CONFIG}" == "true" ]]; then
-  cursor_mcp_path="${CURSOR_MCP_PATH:-${HOME}/.cursor/mcp.json}"
-  cursor_workspace_dir="${CURSOR_WORKSPACE_DIR:-\${workspaceFolder}}"
-  if [[ "${cursor_workspace_dir}" != *'${'* ]]; then
-    [[ -d "${cursor_workspace_dir}" ]] || die "Cursor workspace dir does not exist: ${cursor_workspace_dir}"
-  fi
-
-  if [[ ! -e "${cursor_mcp_path}" ]]; then
-    [[ -f "${CURSOR_TEMPLATE_PATH}" ]] || die "Missing template: ${CURSOR_TEMPLATE_PATH}"
-    cursor_mcp_dir="$(dirname "${cursor_mcp_path}")"
-    log "Writing default Cursor MCP config: ${cursor_mcp_path}"
-    run mkdir -p "${cursor_mcp_dir}"
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log "DRY_RUN: would substitute __CURSOR_WORKSPACE_DIR__ => ${cursor_workspace_dir}"
-    else
-      (
-        umask 077
-        tmp="${cursor_mcp_path}.tmp.$$"
-        sed "s|__CURSOR_WORKSPACE_DIR__|${cursor_workspace_dir}|g" "${CURSOR_TEMPLATE_PATH}" > "${tmp}"
-        chmod 600 "${tmp}"
-        mv "${tmp}" "${cursor_mcp_path}"
-      )
-    fi
-  else
-    log "Cursor MCP config already exists, not overwriting: ${cursor_mcp_path}"
-  fi
-fi
-
-for cmd in node npm npx uvx codex; do
+for cmd in node npm npx uvx codex opencode; do
   have "${cmd}" || die "Required command not found on PATH: ${cmd}"
 done
 
 log "Bootstrap complete."
-log "  codex: $(command -v codex) ($(codex --version 2>/dev/null || echo 'unknown'))"
-log "  npx:   $(command -v npx)"
-log "  uvx:   $(command -v uvx)"
+log "  codex:    $(command -v codex) ($(codex --version 2>/dev/null || echo 'unknown'))"
+log "  opencode: $(command -v opencode) ($(opencode --version 2>/dev/null || echo 'unknown'))"
+log "  npx:      $(command -v npx)"
+log "  uvx:      $(command -v uvx)"
+log "Next step: clone your private config repo and apply it to ~/.codex and ~/.config/opencode."

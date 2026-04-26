@@ -1,31 +1,46 @@
 # agentic-coding-bootstrap
 
-Bootstrap script for agentic coding tools (Codex CLI + MCP + Cursor MCP config).
+Bootstrap script for agentic coding tools.
 
 One-line install options:
 
 - `git clone https://github.com/n-patiphon/agentic-coding-bootstrap.git && cd agentic-coding-bootstrap && ./bootstrap-agentic-coding.sh`
-- `curl -fsSL https://raw.githubusercontent.com/n-patiphon/agentic-coding-bootstrap/main/bootstrap-agentic-coding.sh | bash -s --` (requires `curl`; downloads `assets/*` automatically)
+- `curl -fsSL https://raw.githubusercontent.com/n-patiphon/agentic-coding-bootstrap/main/bootstrap-agentic-coding.sh | bash -s --`
 
 Usage:
 
 - `./bootstrap-agentic-coding.sh --help`
 - `./bootstrap-agentic-coding.sh`
 
-## Slack notifications (Codex CLI)
+## What it installs
 
-The default `assets/codex-config.default.toml` enables `notify` and installs a small notifier script.
+- Node.js with `npm` and `npx` when needed
+- `uv` / `uvx`
+- Codex CLI
+- OpenCode CLI
 
-Preferred (threaded, grouped by Codex `session_id`, and broadcast in-channel):
+This repo does not manage any personal configuration. It intentionally does **not** write:
 
-- Slack Web API: `export SLACK_BOT_TOKEN='xoxb-...'` and `export SLACK_CHANNEL='C0123456789'`
+- `~/.codex/config.toml`
+- `~/.config/opencode/opencode.json`
+- MCP config
+- notifier scripts
+- provider/model settings
 
-Fallbacks:
+## Next step after install
 
-- Incoming webhook (unthreaded): `export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'`
-- Desktop notification: `notify-send` (if installed)
+Apply your private config repo after the tools are installed.
 
-Message format:
+Example:
 
-- First message in a session thread: `Task summary (<dir>)` + the assistant message
-- Replies: assistant message only (to keep the channel/thread less cluttered)
+```bash
+git clone <private-config-repo> ~/local_work/misc_ws/agentic_coding_configs
+cd ~/local_work/misc_ws/agentic_coding_configs
+python3 scripts/codex_sync.py --all --apply
+python3 scripts/opencode_sync.py --all --apply
+```
+
+References:
+
+- Codex CLI: https://developers.openai.com/codex/
+- OpenCode install docs: https://opencode.ai/en/docs
